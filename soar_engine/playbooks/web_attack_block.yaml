@@ -1,0 +1,42 @@
+# Playbook 3: Web attack source blocking (Nginx)
+#
+# Blocks IPs producing repeated web-attack alerts (SQLi / XSS / path traversal / scanners).
+id: web-attack-block
+name: Web Attack Source Blocking
+description: Drops traffic from a source repeatedly hitting Nginx with attack patterns.
+enabled: true
+threat_type: Web Application Attack
+
+trigger:
+  all:
+    - { field: rule_groups, op: contains, value: web }
+    - { field: rule_groups, op: contains, value: attack }
+
+threshold:
+  count_when:
+    all:
+      - { field: rule_groups, op: contains, value: web }
+      - { field: rule_groups, op: contains, value: attack }
+  group_by: source_ip
+  gt: 3
+  window_seconds: 120
+
+required_fields: [source_ip, agent_id]
+extract:
+  attacker_ip: source_ip
+  agent_id: agent_id
+  target_host: agent_name
+
+hitl:
+  enabled: true
+  timeout_seconds: 300
+  on_timeout: deny
+
+actions:
+  - name: block-web-attacker
+    responders: [wazuh_active_response, ssh_iptables]
+    params:
+      command: "!firewall-drop"
+      agent_id: "{agent_id}"
+      srcip: "{attacker_ip}"
+      host: "{target_host}"

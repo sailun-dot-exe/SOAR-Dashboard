@@ -1,0 +1,38 @@
+# Playbook 2: Compromised container isolation
+#
+# Fires on high-severity host-compromise signals (custom rule 100200 "reverse shell" shipped in the
+# lab, rootkit / trojan detections, or any level >= 13 attack alert) and disconnects the affected
+# container from every Docker network via the Docker Engine API.
+id: container-isolation
+name: Compromised Container Isolation
+description: Network-isolates the container that raised a host-compromise alert.
+enabled: true
+threat_type: Host Compromise
+
+trigger:
+  any:
+    - { field: rule_id, op: eq, value: 100200 }
+    - { field: rule_groups, op: contains, value: rootcheck }
+    - all:
+        - { field: rule_level, op: gte, value: 13 }
+        - { field: rule_groups, op: contains, value: attack }
+
+required_fields: [agent_name]
+extract:
+  container: agent_name
+  agent_id: agent_id
+  target_host: agent_name
+
+suppression_seconds: 1800
+
+hitl:
+  enabled: true
+  timeout_seconds: 300
+  on_timeout: deny
+  auto_execute_above_level: 12
+
+actions:
+  - name: isolate-container
+    responders: [docker_network_disconnect]
+    params:
+      container: "{container}"

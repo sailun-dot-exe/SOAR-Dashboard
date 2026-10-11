@@ -1,0 +1,55 @@
+# Playbook 1: SSH brute-force containment
+#
+# Trigger : rule_id == 5712 OR (rule_level >= 10 AND description CONTAINS "sshd: Authentication failed")
+#           (5720 / 5763 are Wazuh's equivalent brute-force rules for *valid* user names)
+# Gate    : > 5 failed SSH attempts from the same source_ip within 60 seconds
+# Actions : HITL approval -> Wazuh Active Response firewall-drop (fallback: iptables over SSH)
+id: ssh-bruteforce-containment
+name: SSH Brute-Force Containment
+description: Blocks the attacking source IP on the targeted agent after HITL approval.
+enabled: true
+threat_type: SSH Brute Force
+
+trigger:
+  any:
+    - field: rule_id
+      op: in
+      value: [5712, 5720, 5763]
+    - all:
+        - { field: rule_level, op: gte, value: 10 }
+        - { field: description, op: icontains, value: "sshd: Authentication failed" }
+
+threshold:
+  # Every failed-authentication event (incl. the trigger itself) counts toward the window.
+  count_when:
+    any:
+      - { field: rule_groups, op: contains, value: authentication_failed }
+      - { field: rule_groups, op: contains, value: invalid_login }
+      - { field: rule_id, op: in, value: [5503, 5557, 5710, 5712, 5716, 5720, 5758, 5760, 5763] }
+  group_by: source_ip
+  gt: 5
+  window_seconds: 60
+
+required_fields: [source_ip, agent_id]
+extract:
+  attacker_ip: source_ip
+  agent_id: agent_id
+  target_host: agent_name
+
+suppression_seconds: 600
+
+hitl:
+  enabled: true
+  timeout_seconds: 300          # 5 minute decision window
+  on_timeout: deny              # safe posture: do nothing ...
+  auto_execute_above_level: 12  # ... unless rule_level > 12
+
+actions:
+  - name: block-attacker-ip
+    responders: [wazuh_active_response, ssh_iptables]
+    params:
+      command: "!firewall-drop"
+      agent_id: "{agent_id}"
+      srcip: "{attacker_ip}"
+      host: "{target_host}"
+      chain: INPUT
