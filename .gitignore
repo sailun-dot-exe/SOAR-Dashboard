@@ -1,0 +1,10 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+*.db
+*.db-*
+e2e-report.json
