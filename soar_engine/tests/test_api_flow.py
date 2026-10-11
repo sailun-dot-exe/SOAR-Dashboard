@@ -248,3 +248,12 @@ async def _expire(container: Container, incident_id: str) -> None:
         await session.execute(update(Incident).where(Incident.id == incident_id)
                               .values(hitl_deadline=utcnow() - timedelta(seconds=1)))
         await session.commit()
+
+
+async def test_dashboard_served(client: httpx.AsyncClient) -> None:
+    resp = await client.get("/dashboard")
+    assert resp.status_code == 200
+    assert "SOAR Console" in resp.text
+    assert "default-src 'self'" in resp.headers["content-security-policy"]
+    root = await client.get("/", follow_redirects=False)
+    assert root.status_code in (302, 307)

@@ -12,7 +12,7 @@ from fastapi import FastAPI
 
 from app.config import Settings, get_settings
 from app.container import Container, build_container
-from app.routers import actions, alerts, audit, incidents, system
+from app.routers import actions, alerts, audit, dashboard, incidents, system
 
 logger = logging.getLogger("soar")
 
@@ -51,7 +51,7 @@ def create_app(settings: Settings | None = None, container: Container | None = N
 
     app = FastAPI(title=settings.app_name, version="1.0.0", lifespan=lifespan)
     for router in (system.router, alerts.router, actions.router, incidents.router,
-                   audit.router):
+                   audit.router, dashboard.router):
         app.include_router(router)
     return app
 

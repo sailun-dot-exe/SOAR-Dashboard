@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
@@ -20,8 +20,10 @@ async def list_audit(
     session: SessionDep,
     incident_id: str | None = None,
     limit: Annotated[int, Query(ge=1, le=5000)] = 500,
+    order: Literal["asc", "desc"] = "asc",
 ) -> list[AuditEntry]:
-    query = select(AuditEntry).order_by(AuditEntry.seq).limit(limit)
+    seq = AuditEntry.seq.desc() if order == "desc" else AuditEntry.seq
+    query = select(AuditEntry).order_by(seq).limit(limit)
     if incident_id:
         query = query.where(AuditEntry.incident_id == incident_id)
     return list(await session.scalars(query))

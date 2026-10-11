@@ -23,6 +23,7 @@ python3 scripts/e2e_test.py     # live attack -> HITL -> block, 16 checks (gener
 
 | URL | What |
 |---|---|
+| http://localhost:8000/dashboard | SOAR Console: live incidents, timeline, approve/deny, audit chain, playbooks (sign in with `SOAR_ADMIN_TOKEN`) |
 | http://localhost:8000/docs | SOAR OpenAPI UI |
 | http://localhost:8025 | Mailpit, where HITL approval e-mails land |
 
