@@ -1,0 +1,32 @@
+
+<!-- SOAR lab: log sources monitored on the victim -->
+<ossec_config>
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/auth.log</location>
+  </localfile>
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/syslog</location>
+  </localfile>
+  <localfile>
+    <log_format>apache</log_format>
+    <location>/var/log/nginx/access.log</location>
+  </localfile>
+  <localfile>
+    <log_format>apache</log_format>
+    <location>/var/log/nginx/error.log</location>
+  </localfile>
+  <rootcheck>
+    <disabled>yes</disabled>
+  </rootcheck>
+  <sca>
+    <enabled>no</enabled>
+  </sca>
+  <syscheck>
+    <disabled>yes</disabled>
+  </syscheck>
+  <active-response>
+    <disabled>no</disabled>
+  </active-response>
+</ossec_config>

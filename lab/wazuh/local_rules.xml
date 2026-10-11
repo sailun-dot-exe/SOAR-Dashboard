@@ -1,0 +1,13 @@
+<!-- SOAR lab custom rules -->
+<group name="local,soar,attack,">
+  <!-- Simulated host-compromise signal used to exercise the container-isolation playbook.
+       Generate it on the victim with:  logger -p auth.crit "SOAR-SIM reverse shell spawned" -->
+  <rule id="100200" level="13">
+    <match>SOAR-SIM reverse shell spawned</match>
+    <description>Reverse shell spawned on host (simulated compromise)</description>
+    <mitre>
+      <id>T1059.004</id>
+    </mitre>
+    <group>soar_isolation,</group>
+  </rule>
+</group>

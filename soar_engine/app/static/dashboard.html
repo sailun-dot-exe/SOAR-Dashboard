@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SOAR Console</title>
+<style>
+:root{--bg:#0d1117;--panel:#161b22;--panel2:#1c2330;--border:#30363d;--text:#e6edf3;--muted:#8b949e;
+--red:#f85149;--orange:#d29922;--green:#3fb950;--blue:#58a6ff;--purple:#bc8cff;--grey:#6e7681}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);
+font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}
+header{display:flex;align-items:center;gap:16px;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--panel)}
+header h1{font-size:17px;margin:0;font-weight:600}header h1 span{color:var(--blue)}
+.live{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green)}
+.dot.off{background:var(--red);box-shadow:0 0 6px var(--red)}
+nav{display:flex;gap:4px;margin-left:24px}nav button{background:none;border:0;color:var(--muted);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:14px}
+nav button.active,nav button:hover{background:var(--panel2);color:var(--text)}
+.spacer{flex:1}.btn{background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px}
+.btn:hover{border-color:var(--muted)}.btn.approve{background:#238636;border-color:#2ea043}.btn.deny{background:#8e1519;border-color:#b62324}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+main{padding:20px 24px;max-width:1500px;margin:0 auto}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:20px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:14px 16px}
+.card .label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.card .value{font-size:26px;font-weight:600;margin-top:4px}.card .sub{color:var(--muted);font-size:12px;margin-top:2px}
+.grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px}
+@media(max-width:1100px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.panel h2{font-size:14px;margin:0;padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.panel .body{padding:14px 16px}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+th{color:var(--muted);font-weight:500;font-size:12px;background:var(--panel2)}
+tbody tr{cursor:pointer}tbody tr:hover{background:var(--panel2)}tbody tr.sel{background:#1f2a3a}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:600;border:1px solid}
+.s-awaiting_approval{color:var(--orange);border-color:var(--orange)}.s-contained{color:var(--green);border-color:var(--green)}
+.s-approved,.s-auto_approved,.s-executing,.s-triggered{color:var(--blue);border-color:var(--blue)}
+.s-denied,.s-expired,.s-suppressed{color:var(--grey);border-color:var(--grey)}.s-failed{color:var(--red);border-color:var(--red)}
+.sev{display:inline-block;min-width:26px;text-align:center;border-radius:4px;padding:1px 6px;font-weight:600;font-size:12px}
+.sev-h{background:#5a1e1e;color:#ffa198}.sev-m{background:#4d3800;color:#e3b341}.sev-l{background:#1f3a24;color:#7ee787}
+.empty{color:var(--muted);padding:28px;text-align:center}
+.kv{display:grid;grid-template-columns:140px 1fr;gap:6px 12px;margin-bottom:14px}.kv div:nth-child(odd){color:var(--muted)}
+.tl{position:relative;margin:6px 0 16px 6px;padding-left:18px;border-left:2px solid var(--border)}
+.tl .ev{position:relative;margin-bottom:10px}.tl .ev:before{content:"";position:absolute;left:-24px;top:4px;width:10px;height:10px;border-radius:50%;background:var(--blue)}
+.tl .ev.pending:before{background:var(--panel);border:2px solid var(--grey)}.tl .ev.pending{color:var(--muted)}
+.tl .t{color:var(--muted);font-size:12px}.tl .ms{color:var(--purple);font-size:12px;margin-left:6px}
+pre{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;overflow:auto;max-height:260px;margin:0 0 12px;font-size:12px}
+h3{font-size:13px;margin:16px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.exec{border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:8px;background:var(--panel2)}
+.hitl{background:#2d2205;border:1px solid #6e5300;border-radius:8px;padding:12px;margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.hitl .cd{font-weight:600;color:var(--orange)}
+#login{max-width:420px;margin:12vh auto;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:28px}
+#login input{width:100%;padding:9px 10px;margin:12px 0;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px}
+.err{color:var(--red);font-size:13px}.ok{color:var(--green)}.bad{color:var(--red)}
+.toast{position:fixed;bottom:20px;right:20px;background:var(--panel2);border:1px solid var(--border);padding:10px 14px;border-radius:8px;display:none}
+.filters{display:flex;gap:6px;padding:10px 12px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.filters button{background:none;border:1px solid var(--border);color:var(--muted);padding:3px 10px;border-radius:999px;cursor:pointer;font-size:12px}
+.filters button.active{color:var(--text);border-color:var(--blue)}
+.scroll{max-height:calc(100vh - 330px);overflow:auto}
+</style>
+</head>
+<body>
+<div id="login" hidden>
+  <h2 style="margin-top:0">SOAR Console</h2>
+  <p style="color:var(--muted)">Enter the admin token (<code>SOAR_ADMIN_TOKEN</code>) to continue. It is kept only in this browser tab.</p>
+  <form id="loginForm"><input id="tokenInput" type="password" placeholder="X-Admin-Token" autocomplete="off" autofocus>
+  <button class="btn approve" style="width:100%" type="submit">Sign in</button></form>
+  <p id="loginErr" class="err"></p>
+</div>
+<div id="app" hidden>
+<header>
+  <h1><span>&#9632;</span> SOAR Console</h1>
+  <nav>
+    <button data-view="incidents" class="active">Incidents</button>
+    <button data-view="audit">Audit trail</button>
+    <button data-view="playbooks">Playbooks</button>
+  </nav>
+  <div class="spacer"></div>
+  <div class="live"><span id="liveDot" class="dot"></span><span id="liveText">live</span></div>
+  <button class="btn" id="logout">Sign out</button>
+</header>
+<main>
+  <div class="cards">
+    <div class="card"><div class="label">Incidents</div><div class="value" id="cTotal">-</div><div class="sub" id="cTotalSub">&nbsp;</div></div>
+    <div class="card"><div class="label">Awaiting approval</div><div class="value" id="cAwait" style="color:var(--orange)">-</div><div class="sub">HITL gate</div></div>
+    <div class="card"><div class="label">Contained</div><div class="value" id="cContained" style="color:var(--green)">-</div><div class="sub" id="cFailed">&nbsp;</div></div>
+    <div class="card"><div class="label">Ingest &rarr; HITL</div><div class="value" id="cLatency">-</div><div class="sub">median, budget 2000 ms</div></div>
+    <div class="card"><div class="label">Audit chain</div><div class="value" id="cAudit">-</div><div class="sub" id="cAuditSub">&nbsp;</div></div>
+    <div class="card"><div class="label">Integrations</div><div class="value" id="cDeps" style="font-size:15px;line-height:1.7">-</div></div>
+  </div>
+
+  <section id="view-incidents">
+    <div class="grid">
+      <div class="panel">
+        <h2>Incidents</h2>
+        <div class="filters" id="filters">
+          <button data-f="" class="active">All</button><button data-f="awaiting_approval">Awaiting</button>
+          <button data-f="contained">Contained</button><button data-f="denied,expired">Denied / expired</button>
+          <button data-f="failed">Failed</button><button data-f="suppressed">Suppressed</button>
+        </div>
+        <div class="scroll"><table><thead><tr><th>Incident</th><th>Status</th><th>Sev</th><th>Threat</th><th>Attacker</th><th>Target</th><th>Events</th><th>Detected</th></tr></thead>
+        <tbody id="incRows"></tbody></table><div id="incEmpty" class="empty" hidden>No incidents yet. Launch an attack from attacker-sim.</div></div>
+      </div>
+      <div class="panel"><h2 id="dTitle">Incident detail</h2><div class="body scroll" id="detail"><div class="empty">Select an incident</div></div></div>
+    </div>
+  </section>
+
+  <section id="view-audit" hidden>
+    <div class="panel"><h2>Hash-chained audit log <span class="spacer"></span><span id="auditVerify" style="font-weight:400;font-size:12px"></span></h2>
+      <div class="scroll"><table><thead><tr><th>#</th><th>Time</th><th>Event</th><th>Incident</th><th>Actor</th><th>Hash</th><th>Prev</th></tr></thead><tbody id="auditRows"></tbody></table></div></div>
+  </section>
+
+  <section id="view-playbooks" hidden><div id="pbList"></div></section>
+</main>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+"use strict";
+const KEY = "soarAdminToken";
+const $ = (id) => document.getElementById(id);
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const state = {incidents: [], selected: null, filter: "", view: "incidents"};
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, {...opts, headers: {"X-Admin-Token": sessionStorage.getItem(KEY) || "", "Accept": "application/json", ...(opts.headers || {})}});
+  if (r.status === 401) { showLogin("Invalid admin token"); throw new Error("unauthorized"); }
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok && r.status !== 409) throw new Error(body.detail || r.statusText);
+  return body;
+}
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = "none", 3500); }
+function fmtTime(ts) { return ts ? new Date(ts).toLocaleTimeString([], {hour12: false}) : "-"; }
+function fmtDate(ts) { return ts ? new Date(ts).toLocaleString([], {hour12: false}) : "-"; }
+function ago(ts) { const s = Math.round((Date.now() - new Date(ts)) / 1000); return s < 60 ? s + "s ago" : s < 3600 ? Math.round(s / 60) + "m ago" : Math.round(s / 3600) + "h ago"; }
+function sevCls(l) { return l >= 12 ? "sev-h" : l >= 8 ? "sev-m" : "sev-l"; }
+function badge(s) { return `<span class="badge s-${esc(s)}">${esc(s.replace("_", " "))}</span>`; }
+
+function showLogin(err) { $("app").hidden = true; $("login").hidden = false; $("loginErr").textContent = err || ""; }
+$("loginForm").onsubmit = async (e) => {
+  e.preventDefault(); sessionStorage.setItem(KEY, $("tokenInput").value.trim());
+  try { await api("/api/v1/incidents?limit=1"); start(); } catch (_) {}
+};
+$("logout").onclick = () => { sessionStorage.removeItem(KEY); location.reload(); };
+
+document.querySelectorAll("nav button").forEach((b) => b.onclick = () => {
+  document.querySelectorAll("nav button").forEach((x) => x.classList.toggle("active", x === b));
+  state.view = b.dataset.view;
+  for (const v of ["incidents", "audit", "playbooks"]) $("view-" + v).hidden = v !== state.view;
+  refresh();
+});
+$("filters").onclick = (e) => {
+  if (!e.target.dataset || e.target.dataset.f === undefined) return;
+  state.filter = e.target.dataset.f;
+  document.querySelectorAll("#filters button").forEach((x) => x.classList.toggle("active", x === e.target));
+  renderIncidents();
+};
+
+function renderIncidents() {
+  const wanted = state.filter ? state.filter.split(",") : null;
+  const rows = state.incidents.filter((i) => !wanted || wanted.includes(i.status));
+  $("incEmpty").hidden = rows.length > 0;
+  $("incEmpty").textContent = state.incidents.length
+    ? "No incidents match this filter."
+    : "No incidents yet. Launch an attack from attacker-sim.";
+  $("incRows").innerHTML = rows.map((i) => `<tr data-id="${esc(i.id)}" class="${i.id === state.selected ? "sel" : ""}">
+    <td class="mono">${esc(i.id)}</td><td>${badge(i.status)}</td><td><span class="sev ${sevCls(i.severity)}">${esc(i.severity)}</span></td>
+    <td>${esc(i.threat_type)}</td><td class="mono">${esc(i.source_ip || "-")}</td><td>${esc(i.agent_name)} <span style="color:var(--muted)">(${esc(i.agent_id)})</span></td>
+    <td>${esc(i.correlated_events)}</td><td title="${esc(fmtDate(i.playbook_triggered_at))}">${esc(ago(i.playbook_triggered_at))}</td></tr>`).join("");
+  document.querySelectorAll("#incRows tr").forEach((tr) => tr.onclick = () => { state.selected = tr.dataset.id; renderIncidents(); loadDetail(); });
+}
+
+function renderCards(deps, audit) {
+  const inc = state.incidents, by = (s) => inc.filter((i) => s.includes(i.status)).length;
+  $("cTotal").textContent = inc.length;
+  $("cTotalSub").textContent = by(["denied", "expired"]) + " denied/expired, " + by(["suppressed"]) + " suppressed";
+  $("cAwait").textContent = by(["awaiting_approval"]);
+  $("cContained").textContent = by(["contained"]);
+  $("cFailed").textContent = by(["failed"]) + " failed";
+  const lat = inc.filter((i) => i.hitl_sent_at).map((i) => new Date(i.hitl_sent_at) - new Date(i.alert_received_at)).sort((a, b) => a - b);
+  $("cLatency").textContent = lat.length ? lat[Math.floor(lat.length / 2)] + " ms" : "-";
+  if (audit) {
+    $("cAudit").innerHTML = audit.valid ? '<span class="ok">&#10003; intact</span>' : '<span class="bad">&#10007; broken</span>';
+    $("cAuditSub").textContent = audit.valid ? audit.entries_checked + " entries" : "first bad seq " + audit.first_invalid_seq;
+  }
+  if (deps) {
+    const agents = (deps.wazuh.agents || []).filter((a) => a.id !== "000");
+    const active = agents.filter((a) => a.status === "active").length;
+    $("cDeps").innerHTML = `Wazuh <span class="${deps.wazuh.ok ? "ok" : "bad"}">${deps.wazuh.ok ? active + "/" + agents.length + " agents" : "down"}</span><br>
+      Docker <span class="${deps.docker.ok ? "ok" : "bad"}">${deps.docker.ok ? "ok" : "down"}</span> &middot;
+      HITL <span class="${deps.notification_channels.length ? "ok" : "bad"}">${esc(deps.notification_channels.join(", ") || "log only")}</span>`;
+  }
+}
+
+async function loadDetail() {
+  const id = state.selected; if (!id) return;
+  const [d, tl] = await Promise.all([api(`/api/v1/incidents/${encodeURIComponent(id)}`), api(`/api/v1/incidents/${encodeURIComponent(id)}/timeline`)]);
+  if (id !== state.selected) return;
+  $("dTitle").innerHTML = `<span class="mono">${esc(d.id)}</span> ${badge(d.status)}`;
+  let hitl = "";
+  if (d.status === "awaiting_approval") {
+    hitl = `<div class="hitl"><b>Containment requires approval.</b>
+      <span>Auto-decision in <span class="cd" data-deadline="${esc(d.hitl_deadline)}"></span></span><span class="spacer"></span>
+      <button class="btn approve" data-act="approve">Approve mitigation</button><button class="btn deny" data-act="deny">Deny</button></div>`;
+  }
+  const execs = d.executions.length ? d.executions.map((x) => `<div class="exec">
+      <div><b>${esc(x.action_name)}</b> via <code>${esc(x.responder)}</code> &rarr; ${badge(x.status)}
+      <span style="color:var(--muted)">HTTP ${esc(x.status_code ?? "-")} &middot; ${esc(x.attempts)} attempt(s) &middot; target ${esc(x.target)}</span></div>
+      ${x.error ? `<div class="err">${esc(x.error)}</div>` : ""}
+      <pre>${esc(JSON.stringify(x.response, null, 2))}</pre></div>`).join("") : '<div style="color:var(--muted)">No actions executed.</div>';
+  $("detail").innerHTML = `${hitl}
+    <div class="kv">
+      <div>Playbook</div><div>${esc(d.playbook_name)} <code>${esc(d.playbook_id)}</code></div>
+      <div>Threat</div><div>${esc(d.threat_type)}</div>
+      <div>Severity</div><div><span class="sev ${sevCls(d.severity)}">${esc(d.severity)}</span></div>
+      <div>Attacker IP</div><div class="mono">${esc(d.source_ip || "-")}</div>
+      <div>Target host</div><div>${esc(d.agent_name)} (agent ${esc(d.agent_id)})</div>
+      <div>Correlated</div><div>${esc(d.correlated_events)} events, ${esc(d.alert_count)} alert(s) attached</div>
+      <div>HITL channels</div><div>${esc(d.hitl_channels.join(", ") || "-")}</div>
+      <div>Decision</div><div>${esc(d.decision || "-")} ${d.decision_by ? "by " + esc(d.decision_by) : ""}</div>
+      ${d.status_reason ? `<div>Reason</div><div>${esc(d.status_reason)}</div>` : ""}
+    </div>
+    <h3>Timeline</h3><div class="tl">${tl.events.map((e) => `<div class="ev ${e.timestamp ? "" : "pending"}">
+      <div>${esc(e.stage.replace(/_/g, " "))}${e.elapsed_ms != null ? `<span class="ms">+${esc(e.elapsed_ms.toFixed(1))} ms</span>` : ""}</div>
+      <div class="t">${esc(e.timestamp ? fmtDate(e.timestamp) : "pending")}</div></div>`).join("")}</div>
+    <h3>Actions</h3>${execs}
+    <h3>Parsed variables</h3><pre>${esc(JSON.stringify(d.parsed_vars, null, 2))}</pre>
+    <h3>Trigger payload</h3><pre>${esc(JSON.stringify(d.trigger_payload, null, 2))}</pre>`;
+  document.querySelectorAll("#detail [data-act]").forEach((b) => b.onclick = () => decide(d.id, b.dataset.act));
+  tickCountdowns();
+}
+
+async function decide(id, act) {
+  if (act === "approve" && !confirm(`Approve containment for ${id}? This will block traffic on the target.`)) return;
+  document.querySelectorAll("#detail [data-act]").forEach((b) => b.disabled = true);
+  try { const r = await api(`/api/v1/actions/${act}/${encodeURIComponent(id)}`); toast(r.message || act); }
+  catch (e) { toast("Error: " + e.message); }
+  await refresh();
+}
+
+function tickCountdowns() {
+  document.querySelectorAll(".cd[data-deadline]").forEach((el) => {
+    const s = Math.max(0, Math.round((new Date(el.dataset.deadline) - Date.now()) / 1000));
+    el.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  });
+}
+
+async function renderAudit() {
+  const [rows, v] = await Promise.all([api("/api/v1/audit?order=desc&limit=300"), api("/api/v1/audit/verify")]);
+  $("auditVerify").innerHTML = v.valid ? `<span class="ok">&#10003; chain verified (${esc(v.entries_checked)} entries, head ${esc((v.head_hash || "").slice(0, 16))})</span>`
+    : `<span class="bad">&#10007; chain broken at seq ${esc(v.first_invalid_seq)}: ${esc(v.reason)}</span>`;
+  $("auditRows").innerHTML = rows.map((r) => `<tr title="${esc(JSON.stringify(r.data))}"><td>${esc(r.seq)}</td><td>${esc(fmtDate(r.timestamp))}</td>
+    <td><code>${esc(r.event_type)}</code></td><td class="mono">${esc(r.incident_id || "-")}</td><td>${esc(r.actor)}</td>
+    <td class="mono">${esc(r.hash.slice(0, 12))}&hellip;</td><td class="mono" style="color:var(--muted)">${esc(r.prev_hash.slice(0, 12))}&hellip;</td></tr>`).join("");
+}
+
+async function renderPlaybooks() {
+  const pbs = await api("/api/v1/playbooks");
+  $("pbList").innerHTML = pbs.map((p) => `<div class="panel" style="margin-bottom:12px"><h2>${esc(p.name)} <code style="color:var(--muted)">${esc(p.id)}</code></h2>
+    <div class="body"><p style="margin-top:0;color:var(--muted)">${esc(p.description || "")}</p><pre style="max-height:420px">${esc(JSON.stringify(p, null, 2))}</pre></div></div>`).join("");
+}
+
+let ticks = 0;
+async function refresh() {
+  try {
+    state.incidents = await api("/api/v1/incidents?limit=200");
+    const withSlow = ticks++ % 5 === 0;
+    const [deps, audit] = withSlow ? await Promise.all([api("/api/v1/system/dependencies").catch(() => null), api("/api/v1/audit/verify").catch(() => null)]) : [null, null];
+    renderCards(deps, audit);
+    if (state.view === "incidents") { renderIncidents(); if (state.selected) await loadDetail(); }
+    else if (state.view === "audit") await renderAudit();
+    else if (state.view === "playbooks" && !$("pbList").innerHTML) await renderPlaybooks();
+    $("liveDot").classList.remove("off"); $("liveText").textContent = "live - " + fmtTime(new Date());
+  } catch (e) {
+    $("liveDot").classList.add("off"); $("liveText").textContent = "disconnected";
+  }
+}
+
+let timer;
+function start() {
+  $("login").hidden = true; $("app").hidden = false;
+  refresh(); clearInterval(timer); timer = setInterval(refresh, 3000); setInterval(tickCountdowns, 1000);
+}
+sessionStorage.getItem(KEY) ? start() : showLogin();
+</script>
+</body>
+</html>

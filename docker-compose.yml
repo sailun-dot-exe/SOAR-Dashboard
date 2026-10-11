@@ -1,0 +1,176 @@
+# SOAR lab: Wazuh Manager -> SOAR engine (FastAPI) -> HITL (Slack / e-mail) -> containment.
+#   docker compose up -d --build       (requires .env, see .env.example)
+name: soar-lab
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }
+
+networks:
+  soar-lab:
+    name: soar-lab
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
+
+volumes:
+  soar-keys:
+  postgres-data:
+  wazuh-etc:
+  wazuh-logs:
+  wazuh-queue:
+  wazuh-api-config:
+
+services:
+  # One-shot: SSH keypair used by the SOAR "ssh_iptables" responder.
+  soar-keygen:
+    build: ./lab/victim
+    image: soar-lab/target-victim:latest
+    network_mode: none
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "[ -f /keys/id_ed25519 ] || ssh-keygen -q -t ed25519 -N '' -C soar-engine -f /keys/id_ed25519; chown 10001 /keys/id_ed25519; chmod 600 /keys/id_ed25519"
+    volumes:
+      - soar-keys:/keys
+    logging: *logging
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: soar-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: soar
+      POSTGRES_DB: soar
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U soar -d soar"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      soar-lab: { ipv4_address: 172.28.0.40 }
+    logging: *logging
+
+  # SMTP sink with web UI (http://localhost:8025) to receive HITL approval e-mails.
+  mailpit:
+    image: axllent/mailpit:v1.21
+    container_name: soar-mailpit
+    restart: unless-stopped
+    ports:
+      - "8025:8025"
+    networks:
+      soar-lab: { ipv4_address: 172.28.0.50 }
+    logging: *logging
+
+  # Least-privilege Docker API for the container-isolation responder.
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    container_name: soar-docker-proxy
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1
+      NETWORKS: 1
+      POST: 1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      soar-lab: { ipv4_address: 172.28.0.60 }
+    logging: *logging
+
+  soar-engine:
+    build: ./soar_engine
+    image: soar-lab/soar-engine:latest
+    container_name: soar-engine
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      soar-keygen: { condition: service_completed_successfully }
+    environment:
+      SOAR_DATABASE_URL: postgresql+asyncpg://soar:${POSTGRES_PASSWORD}@postgres:5432/soar
+      SOAR_API_TOKEN: ${SOAR_API_TOKEN:?set SOAR_API_TOKEN in .env}
+      SOAR_ADMIN_TOKEN: ${SOAR_ADMIN_TOKEN:?set SOAR_ADMIN_TOKEN in .env}
+      SOAR_HITL_SIGNING_KEY: ${SOAR_HITL_SIGNING_KEY:?set SOAR_HITL_SIGNING_KEY in .env}
+      SOAR_PUBLIC_BASE_URL: ${SOAR_PUBLIC_BASE_URL:-http://localhost:8000}
+      SOAR_HITL_TIMEOUT_SECONDS: ${SOAR_HITL_TIMEOUT_SECONDS:-300}
+      SOAR_HITL_AUTO_EXECUTE_LEVEL: 12
+      SOAR_PROTECTED_CIDRS: 127.0.0.0/8,172.28.0.1/32,172.28.0.10/32,172.28.0.20/32,172.28.0.40/32
+      SOAR_SLACK_WEBHOOK_URL: ${SOAR_SLACK_WEBHOOK_URL:-}
+      SOAR_SMTP_HOST: mailpit
+      SOAR_SMTP_PORT: 1025
+      SOAR_SMTP_FROM: soar@lab.local
+      SOAR_SMTP_TO: secops@lab.local
+      SOAR_WAZUH_API_URL: https://wazuh-manager:55000
+      SOAR_WAZUH_API_USER: soar-api
+      SOAR_WAZUH_API_PASSWORD: ${WAZUH_API_PASSWORD:?set WAZUH_API_PASSWORD in .env}
+      SOAR_WAZUH_VERIFY_SSL: "false"
+      SOAR_SSH_USERNAME: soar
+      SOAR_SSH_KEY_PATH: /run/soar-keys/id_ed25519
+      SOAR_DOCKER_API_URL: http://docker-proxy:2375
+    volumes:
+      - soar-keys:/run/soar-keys:ro
+    ports:
+      - "8000:8000"
+    networks:
+      soar-lab: { ipv4_address: 172.28.0.10 }
+    logging: *logging
+
+  wazuh-manager:
+    image: wazuh/wazuh-manager:4.14.8
+    container_name: wazuh-manager
+    hostname: wazuh-manager
+    restart: unless-stopped
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+      nofile: { soft: 655360, hard: 655360 }
+    environment:
+      API_USERNAME: soar-api
+      API_PASSWORD: ${WAZUH_API_PASSWORD}
+      SOAR_HOOK_URL: http://soar-engine:8000/api/v1/alerts/ingest
+      SOAR_API_TOKEN: ${SOAR_API_TOKEN}
+    volumes:
+      - wazuh-etc:/var/ossec/etc
+      - wazuh-logs:/var/ossec/logs
+      - wazuh-queue:/var/ossec/queue
+      - wazuh-api-config:/var/ossec/api/configuration
+      - ./lab/wazuh/ossec.conf:/wazuh-config-mount/etc/ossec.conf:ro
+      - ./lab/wazuh/local_rules.xml:/wazuh-config-mount/etc/rules/local_rules.xml:ro
+      - ./lab/wazuh/integrations/custom-soar:/wazuh-config-mount/integrations/custom-soar:ro
+      - ./lab/wazuh/10-soar-integration.sh:/entrypoint-scripts/10-soar-integration.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sk -o /dev/null -w '%{http_code}' https://localhost:55000/ | grep -q 401"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    depends_on:
+      soar-engine: { condition: service_started }
+    networks:
+      soar-lab: { ipv4_address: 172.28.0.20 }
+    logging: *logging
+
+  target-victim:
+    build: ./lab/victim
+    image: soar-lab/target-victim:latest
+    container_name: target-victim
+    hostname: target-victim
+    restart: unless-stopped
+    cap_add: [NET_ADMIN]
+    depends_on:
+      wazuh-manager: { condition: service_healthy }
+      soar-keygen: { condition: service_completed_successfully }
+    volumes:
+      - soar-keys:/soar-keys:ro
+    networks:
+      soar-lab: { ipv4_address: 172.28.0.30 }
+    logging: *logging
+
+  attacker-sim:
+    build: ./lab/attacker
+    image: soar-lab/attacker-sim:latest
+    container_name: attacker-sim
+    restart: unless-stopped
+    networks:
+      soar-lab: { ipv4_address: 172.28.0.66 }
+    logging: *logging

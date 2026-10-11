@@ -1,0 +1,90 @@
+#!/var/ossec/framework/python/bin/python3
+"""Wazuh integratord -> SOAR engine webhook forwarder.
+
+Invoked by wazuh-integratord as:  custom-soar <alert_file> <api_key> <hook_url> [options_file]
+Reads the JSON alert, normalizes the fields the SOAR engine expects and POSTs them to
+/api/v1/alerts/ingest with the X-SOAR-Token header. Retries up to 3 times.
+"""
+
+import json
+import sys
+import time
+import urllib.error
+import urllib.request
+from datetime import datetime, timezone
+
+LOG_FILE = "/var/ossec/logs/integrations.log"
+MAX_RETRIES = 3
+TIMEOUT = 5
+
+
+def log(message):
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%z")
+    with open(LOG_FILE, "a") as handle:
+        handle.write(f"{stamp} custom-soar: {message}\n")
+
+
+def dig(data, path, default=None):
+    for part in path.split("."):
+        if not isinstance(data, dict):
+            return default
+        data = data.get(part)
+    return default if data is None else data
+
+
+def normalize(alert):
+    return {
+        "rule_id": int(dig(alert, "rule.id", 0)),
+        "rule_level": int(dig(alert, "rule.level", 0)),
+        "description": dig(alert, "rule.description", ""),
+        "rule_groups": dig(alert, "rule.groups", []),
+        "source_ip": dig(alert, "data.srcip"),
+        "agent_id": dig(alert, "agent.id", "000"),
+        "agent_name": dig(alert, "agent.name", "wazuh-manager"),
+        "timestamp": alert.get("timestamp"),
+        "raw_log": alert.get("full_log", ""),
+        "raw": alert,
+    }
+
+
+def post(hook_url, api_key, payload):
+    body = json.dumps(payload).encode()
+    request = urllib.request.Request(
+        hook_url, data=body, method="POST",
+        headers={"Content-Type": "application/json", "X-SOAR-Token": api_key,
+                 "User-Agent": "wazuh-custom-soar/1.0"})
+    for attempt in range(1, MAX_RETRIES + 2):
+        try:
+            with urllib.request.urlopen(request, timeout=TIMEOUT) as response:  # noqa: S310
+                return response.status, response.read().decode()[:500]
+        except urllib.error.HTTPError as exc:
+            if exc.code < 500:
+                return exc.code, exc.read().decode()[:500]
+            error = f"HTTP {exc.code}"
+        except (urllib.error.URLError, OSError) as exc:
+            error = str(exc)
+        if attempt <= MAX_RETRIES:
+            log(f"attempt {attempt} failed ({error}); retrying")
+            time.sleep(0.5 * 2 ** (attempt - 1))
+    raise RuntimeError(f"giving up after {MAX_RETRIES} retries: {error}")
+
+
+def main(argv):
+    if len(argv) < 4:
+        log(f"bad arguments: {argv}")
+        return 2
+    alert_file, api_key, hook_url = argv[1], argv[2], argv[3]
+    with open(alert_file) as handle:
+        alert = json.load(handle)
+    payload = normalize(alert)
+    try:
+        status, body = post(hook_url, api_key, payload)
+    except RuntimeError as exc:
+        log(f"rule {payload['rule_id']} from {payload['source_ip']}: {exc}")
+        return 1
+    log(f"rule {payload['rule_id']} srcip={payload['source_ip']} -> {status} {body}")
+    return 0 if status < 300 else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
