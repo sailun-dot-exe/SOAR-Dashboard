@@ -8,3 +8,4 @@ __pycache__/
 *.db
 *.db-*
 e2e-report.json
+*.egg-info/
