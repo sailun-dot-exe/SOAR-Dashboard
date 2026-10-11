@@ -160,6 +160,9 @@ function renderIncidents() {
   const wanted = state.filter ? state.filter.split(",") : null;
   const rows = state.incidents.filter((i) => !wanted || wanted.includes(i.status));
   $("incEmpty").hidden = rows.length > 0;
+  $("incEmpty").textContent = state.incidents.length
+    ? "No incidents match this filter."
+    : "No incidents yet. Launch an attack from attacker-sim.";
   $("incRows").innerHTML = rows.map((i) => `<tr data-id="${esc(i.id)}" class="${i.id === state.selected ? "sel" : ""}">
     <td class="mono">${esc(i.id)}</td><td>${badge(i.status)}</td><td><span class="sev ${sevCls(i.severity)}">${esc(i.severity)}</span></td>
     <td>${esc(i.threat_type)}</td><td class="mono">${esc(i.source_ip || "-")}</td><td>${esc(i.agent_name)} <span style="color:var(--muted)">(${esc(i.agent_id)})</span></td>
