@@ -12,7 +12,9 @@ threat_type: Host Compromise
 trigger:
   any:
     - { field: rule_id, op: eq, value: 100200 }
-    - { field: rule_groups, op: contains, value: rootcheck }
+    - all:
+        - { field: rule_level, op: gte, value: 12 }
+        - { field: rule_groups, op: contains, value: rootcheck }
     - all:
         - { field: rule_level, op: gte, value: 13 }
         - { field: rule_groups, op: contains, value: attack }
