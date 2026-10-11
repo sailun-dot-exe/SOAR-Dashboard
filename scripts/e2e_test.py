@@ -53,7 +53,7 @@ def check(name: str, ok: bool, detail: str = "") -> bool:
 
 
 def sh(*args: str, check_rc: bool = True, timeout: int = 900) -> subprocess.CompletedProcess[str]:
-    proc = subprocess.run(args, cwd=ROOT, text=True, capture_output=True, timeout=timeout)
+    proc = subprocess.run(args, check=False, cwd=ROOT, text=True, capture_output=True, timeout=timeout)
     if check_rc and proc.returncode != 0:
         raise RuntimeError(f"{' '.join(args)} failed:\n{proc.stdout}\n{proc.stderr}")
     return proc
@@ -90,7 +90,7 @@ def http(method: str, url: str, headers: dict[str, str] | None = None,
                                  headers={"Content-Type": "application/json",
                                           "Accept": "application/json", **(headers or {})})
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
+        with urllib.request.urlopen(req, timeout=10) as resp:
             raw = resp.read().decode()
             status = resp.status
     except urllib.error.HTTPError as exc:
@@ -136,7 +136,7 @@ def find_approve_link(incident_id: str) -> str | None:
     return match.group(1) if match else None
 
 
-def main() -> int:  # noqa: PLR0915
+def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--reuse", action="store_true",
@@ -175,11 +175,12 @@ def main() -> int:  # noqa: PLR0915
 
     step("Launching Hydra SSH brute force from attacker-sim")
     started = time.time()
-    hydra = compose("exec", "-T", "attacker-sim", "timeout", "120", "hydra", "-I", "-t", "4",
-                    "-L", "/wordlists/users.txt", "-P", "/wordlists/passwords.txt",
-                    f"ssh://{VICTIM}", check_rc=False, timeout=180)
-    tail = [ln for ln in hydra.stdout.splitlines() if ln.strip()][-2:]
-    print("  hydra: " + " | ".join(tail))
+    hydra = subprocess.Popen(
+        ["docker", "compose", "exec", "-T", "attacker-sim", "timeout", "120", "hydra", "-I",
+         "-t", "4", "-L", "/wordlists/users.txt", "-P", "/wordlists/passwords.txt",
+         f"ssh://{VICTIM}"],
+        cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    print(f"  hydra running in background (pid {hydra.pid})")
 
     step("Waiting for SOAR incident (playbook trigger + HITL dispatch)")
 
@@ -218,6 +219,12 @@ def main() -> int:  # noqa: PLR0915
               f"status={ex['status']} code={ex['status_code']} attempts={ex['attempts']}")
 
     step("Verifying containment on the endpoint")
+    try:
+        out, _ = hydra.communicate(timeout=150)
+        tail = [ln for ln in out.splitlines() if ln.strip()][-2:]
+        print("  hydra finished: " + " | ".join(tail))
+    except subprocess.TimeoutExpired:
+        hydra.kill()
     rules = ""
     for _ in range(10):
         rules = compose("exec", "-T", VICTIM, "iptables", "-S", "INPUT", check_rc=False).stdout
